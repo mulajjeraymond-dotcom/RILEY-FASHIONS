@@ -40,14 +40,31 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}
   <h2>RILEY FASHIONS</h2>
   <div class="login-sub">AI EXECUTIVE HEADQUARTERS · SECURE SIGN IN</div>
   <form id="login-form">
-   <div class="field"><label>Username</label><input id="login-user" autocomplete="username" required placeholder="Enter your username"></div>
+   <div class="field"><label>Email address</label><input id="login-user" type="email" autocomplete="username" required placeholder="Enter your company email"></div>
    <div class="field"><label>Password</label><input id="login-pass" type="password" autocomplete="current-password" required placeholder="Enter your password"></div>
    <button class="primary" type="submit">Sign in to your office</button>
    <div class="login-error" id="login-error">Incorrect username or password.</div>
   </form>
-  <div class="small muted" style="margin-top:16px;text-align:center">Stage 2 demonstration login. Replace demo authentication with secure server-side authentication before online deployment.</div>
+  <div class="small muted" style="margin-top:16px;text-align:center">Sign in with the email and password assigned to your Riley Fashions account.</div>
  </div>
 </div>
+<script>
+// Install a submit guard as soon as the login form exists. This prevents a file:// page
+// from performing a native form refresh even if a remote script fails to load.
+(function(){
+ const form=document.getElementById('login-form');
+ const errorBox=document.getElementById('login-error');
+ form.addEventListener('submit',function(event){
+   event.preventDefault();
+   if(typeof window.rileyLoginHandler==='function'){
+     window.rileyLoginHandler(event);
+   }else{
+     errorBox.textContent='The sign-in code has not loaded. Check your internet connection, then refresh this page. If the problem continues, open the file using VS Code Live Server.';
+     errorBox.style.display='block';
+   }
+ });
+})();
+</script>
 
 <div class="app">
 <aside class="sidebar">
@@ -64,10 +81,10 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}
   <button data-page="executives"><span class="ico">♛</span><span class="nav-text">AI Executive Offices</span></button>
   <button data-page="reports"><span class="ico">▥</span><span class="nav-text">Reports & Insights</span></button>
  </nav>
- <div class="side-foot">Riley Fashions Management System<br>Prototype v1.0</div>
+ <div class="side-foot">Riley Fashions Management System<br>Supabase-connected edition</div>
 </aside>
 <main class="main">
- <header class="topbar"><div class="crumb">Riley Fashions <span class="muted">/</span> <b id="crumb">Executive Dashboard</b></div><div class="top-actions"><span class="status">● Local workspace</span><span class="user-chip" id="current-user">Not signed in</span><button class="secondary" style="padding:7px 10px;font-size:11px" onclick="logout()">Sign out</button><div class="avatar">RF</div></div></header>
+ <header class="topbar"><div class="crumb">Riley Fashions <span class="muted">/</span> <b id="crumb">Executive Dashboard</b></div><div class="top-actions"><span class="status" id="connection-status">● Connecting to cloud</span><span class="user-chip" id="current-user">Not signed in</span><button class="secondary" style="padding:7px 10px;font-size:11px" onclick="logout()">Sign out</button><div class="avatar">RF</div></div></header>
  <div class="content">
   <section class="page active" id="page-dashboard">
    <div class="welcome"><div><div class="eyebrow">Management overview</div><h2>Good day, Riley Fashions.</h2><p>Your bridal fashion business at a glance. Access is filtered by your signed-in role.</p></div><button class="primary" onclick="openOrder()">＋ Add bridal order</button></div>
@@ -148,49 +165,46 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}
  <div class="field"><label>Reorder level</label><input name="reorder" type="number" min="0" step="0.01" value="2"></div>
  </div><div class="form-actions"><button type="button" class="secondary" onclick="closeModal('material-modal')">Cancel</button><button class="primary" type="submit">Save material</button></div></form></div></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+// If the primary CDN is unavailable, synchronously try the backup CDN before app code runs.
+if (!window.supabase) {
+  document.write('<script src="https://unpkg.com/@supabase/supabase-js@2"><\/script>');
+}
+</script>
 <script>
 
-const USERS = [
- {u:'ceo',p:'RileyCEO2026!',name:'CEO / Owner',role:'CEO',pages:['dashboard','orders','production','inventory','customers','finance','executives','reports']},
- {u:'coo',p:'RileyCOO2026!',name:'Chief Operating Officer',role:'COO',pages:['dashboard','orders','production','inventory','reports']},
- {u:'cfo',p:'RileyCFO2026!',name:'Chief Financial Officer',role:'CFO',pages:['dashboard','orders','finance','reports']},
- {u:'cmo',p:'RileyCMO2026!',name:'Chief Marketing Officer',role:'CMO',pages:['dashboard','customers','reports','executives']},
- {u:'hr',p:'RileyHR2026!',name:'HR Manager',role:'HR Manager',pages:['dashboard','reports']},
- {u:'sales',p:'RileySales2026!',name:'Sales Director',role:'Sales Director',pages:['dashboard','orders','customers','reports']},
- {u:'procurement',p:'RileyProc2026!',name:'Procurement Manager',role:'Procurement Manager',pages:['dashboard','inventory','reports']},
- {u:'quality',p:'RileyQC2026!',name:'Quality Control',role:'Quality Control',pages:['dashboard','production','reports']},
- {u:'audit',p:'RileyAudit2026!',name:'Internal Auditor',role:'Internal Auditor',pages:['dashboard','orders','inventory','finance','reports']}
-];
-let currentUser=null;
-function applyPermissions(){
- if(!currentUser)return;
- document.querySelectorAll('.nav button[data-page]').forEach(b=>{
-   const allowed=currentUser.pages.includes(b.dataset.page);
-   b.style.display=allowed?'flex':'none';
+// Riley Fashions Supabase connection. The publishable key is designed for browser use.
+// Keep the login form from silently refreshing if the Supabase library cannot load.
+if (!window.supabase || !window.supabase.createClient) {
+ const loginForm = document.getElementById('login-form');
+ const loginError = document.getElementById('login-error');
+ loginForm.addEventListener('submit', event => {
+   event.preventDefault();
+   loginError.textContent = 'The secure sign-in service could not load. Check your internet connection, refresh the page, and try again.';
+   loginError.style.display = 'block';
  });
- document.getElementById('current-user').textContent=currentUser.name;
- const active=document.querySelector('.page.active');
- if(active && !currentUser.pages.includes(active.id.replace('page-',''))) showPage('dashboard');
+ loginError.textContent = 'The secure sign-in service could not load. Check your internet connection, refresh the page, and try again.';
+ loginError.style.display = 'block';
+ throw new Error('Supabase JavaScript library did not load from either CDN.');
 }
-document.getElementById('login-form').addEventListener('submit',e=>{
- e.preventDefault();
- const u=document.getElementById('login-user').value.trim().toLowerCase();
- const p=document.getElementById('login-pass').value;
- const found=USERS.find(x=>x.u===u && x.p===p);
- if(!found){document.getElementById('login-error').style.display='block';return}
- currentUser=found;
- document.getElementById('login-error').style.display='none';
- document.getElementById('login-screen').style.display='none';
- applyPermissions();
-});
-function logout(){
- currentUser=null;
- document.getElementById('login-form').reset();
- document.getElementById('login-screen').style.display='grid';
-}
+const SUPABASE_URL = 'https://vcqixtxfcxgmwjlybimo.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_mErIVNRojpkUc8ZF9K9ZjA_8cUcr6-n';
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
-const KEY='rileyFashionsHQ_v1';
-let db=JSON.parse(localStorage.getItem(KEY)||'{"orders":[],"materials":[]}');
+const ROLE_PAGES = {
+ CEO:['dashboard','orders','production','inventory','customers','finance','executives','reports'],
+ COO:['dashboard','orders','production','inventory','reports'],
+ CFO:['dashboard','orders','finance','reports'],
+ CMO:['dashboard','customers','reports','executives'],
+ 'HR Manager':['dashboard','reports'],
+ 'Sales Director':['dashboard','orders','customers','reports'],
+ 'Procurement Manager':['dashboard','inventory','reports'],
+ 'Quality Control':['dashboard','production','reports'],
+ 'Internal Auditor':['dashboard','orders','inventory','finance','reports']
+};
+let currentUser=null;
+let db={orders:[],materials:[]};
 let selectedExec='CEO';
 const executives=[
  ['CEO','♛','Strategy, direction and business growth','Guide the business using order trends, customer demand and financial performance.'],
@@ -205,52 +219,101 @@ const executives=[
 ];
 const money=n=>'UGX '+Number(n||0).toLocaleString('en-US',{maximumFractionDigits:0});
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-function save(){localStorage.setItem(KEY,JSON.stringify(db));render()}
-function showPage(p){if(currentUser && !currentUser.pages.includes(p)){alert('Your account does not have permission to open this department.');return}document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));document.getElementById('page-'+p).classList.add('active');document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===p));document.getElementById('crumb').textContent=({dashboard:'Executive Dashboard',orders:'Bridal Orders',production:'Production',inventory:'Inventory & Materials',customers:'Customers',finance:'Finance Office',executives:'AI Executive Offices',reports:'Reports & Insights'})[p];render()}
+const stages=['New enquiry','Design approved','In production','Fitting','Ready for collection','Completed'];
+function setConnection(message,ok=false){const el=document.getElementById('connection-status');if(el){el.textContent=(ok?'● ':'● ')+message;el.style.background=ok?'#e9f6ef':'#fff3e8';el.style.color=ok?'#23714e':'#8b5a22'}}
+function applyPermissions(){
+ if(!currentUser)return;
+ document.querySelectorAll('.nav button[data-page]').forEach(b=>{b.style.display=currentUser.pages.includes(b.dataset.page)?'flex':'none'});
+ document.getElementById('current-user').textContent=(currentUser.name||currentUser.email)+' · '+currentUser.role;
+ const active=document.querySelector('.page.active');
+ if(active&&!currentUser.pages.includes(active.id.replace('page-','')))showPage('dashboard');
+}
+async function loadProfile(user){
+ const {data,error}=await supabase.from('profiles').select('full_name, role').eq('id',user.id).single();
+ if(error)throw new Error('Could not load your staff profile: '+error.message);
+ if(!data||!data.role||data.role==='Pending')throw new Error('Your account has no department role assigned yet. Ask the CEO to assign your role.');
+ const pages=ROLE_PAGES[data.role];
+ if(!pages)throw new Error('The role "'+data.role+'" is not configured for this website.');
+ currentUser={id:user.id,email:user.email,name:data.full_name||user.email,role:data.role,pages};
+}
+async function loadCloudData(){
+ const [ordersResult,materialsResult]=await Promise.all([
+  supabase.from('bridal_orders').select('*').order('created_at',{ascending:false}),
+  supabase.from('materials').select('*').order('name',{ascending:true})
+ ]);
+ if(ordersResult.error)throw new Error('Could not load bridal orders: '+ordersResult.error.message);
+ if(materialsResult.error)throw new Error('Could not load materials: '+materialsResult.error.message);
+ db.orders=(ordersResult.data||[]).map(o=>({...o,displayId:o.order_number||o.id,customer:o.customer,phone:o.phone||'',type:o.order_type||'',style:o.style||'',date:o.handover_date||'',value:Number(o.order_value||0),paid:Number(o.amount_paid||0),status:o.status||'New enquiry',notes:o.notes||''}));
+ db.materials=(materialsResult.data||[]).map(m=>({...m,name:m.name,category:m.category||'',qty:Number(m.quantity||0),unit:m.unit||'pieces',reorder:Number(m.reorder_level||0)}));
+ render();
+}
+window.rileyLoginHandler=async function(e){
+ e.preventDefault();const email=document.getElementById('login-user').value.trim();const password=document.getElementById('login-pass').value;const err=document.getElementById('login-error');
+ err.style.display='none';const btn=e.target.querySelector('button[type="submit"]');btn.disabled=true;btn.textContent='Signing in…';
+ try{
+  const {data,error}=await supabase.auth.signInWithPassword({email,password});
+  if(error)throw error;
+  await loadProfile(data.user);
+  await loadCloudData();
+  document.getElementById('login-screen').style.display='none';applyPermissions();showPage('dashboard');setConnection('Cloud connected',true);
+ }catch(error){console.error('Riley Fashions sign-in error:',error);err.textContent=error.message||'Sign-in failed. Check your email and password.';err.style.display='block';if(supabase.auth)await supabase.auth.signOut();currentUser=null;setConnection('Sign-in required',false);document.getElementById('login-screen').style.display='grid'}
+ finally{btn.disabled=false;btn.textContent='Sign in to your office'}
+};
+async function logout(){await supabase.auth.signOut();currentUser=null;db={orders:[],materials:[]};document.getElementById('login-form').reset();document.getElementById('login-screen').style.display='grid';document.getElementById('current-user').textContent='Not signed in';setConnection('Signed out',false)}
+const moneyUnused=0;
+function showPage(p){if(currentUser&&!currentUser.pages.includes(p)){alert('Your account does not have permission to open this department.');return}document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));document.getElementById('page-'+p).classList.add('active');document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===p));document.getElementById('crumb').textContent=({dashboard:'Executive Dashboard',orders:'Bridal Orders',production:'Production',inventory:'Inventory & Materials',customers:'Customers',finance:'Finance Office',executives:'AI Executive Offices',reports:'Reports & Insights'})[p];render()}
 document.querySelectorAll('.nav button').forEach(b=>b.addEventListener('click',()=>showPage(b.dataset.page)));
-function openOrder(){document.getElementById('order-modal').classList.add('show')}
-function openMaterial(){document.getElementById('material-modal').classList.add('show')}
+function openOrder(){if(!currentUser||!['CEO','Sales Director'].includes(currentUser.role)){alert('Your role cannot create bridal orders.');return}document.getElementById('order-modal').classList.add('show')}
+function openMaterial(){if(!currentUser||!['CEO','Procurement Manager'].includes(currentUser.role)){alert('Your role cannot add inventory materials.');return}document.getElementById('material-modal').classList.add('show')}
 function closeModal(id){document.getElementById(id).classList.remove('show')}
-document.getElementById('order-form').addEventListener('submit',e=>{e.preventDefault();let f=new FormData(e.target);let value=+f.get('value'),paid=+f.get('paid');if(paid>value){alert('Amount paid cannot exceed the order value.');return}db.orders.unshift({id:'RF-'+Date.now().toString().slice(-6),customer:f.get('customer'),phone:f.get('phone'),type:f.get('type'),style:f.get('style'),date:f.get('date'),value,paid,status:f.get('status'),notes:f.get('notes'),created:new Date().toISOString()});save();e.target.reset();closeModal('order-modal');showPage('orders')});
-document.getElementById('material-form').addEventListener('submit',e=>{e.preventDefault();let f=new FormData(e.target);db.materials.push({name:f.get('name'),category:f.get('category'),qty:+f.get('qty'),unit:f.get('unit'),reorder:+f.get('reorder')});save();e.target.reset();closeModal('material-modal')});
+document.getElementById('order-form').addEventListener('submit',async e=>{
+ e.preventDefault();let f=new FormData(e.target);let value=+f.get('value'),paid=+f.get('paid');if(paid>value){alert('Amount paid cannot exceed the order value.');return}
+ const orderNumber='RF-'+new Date().toISOString().replace(/[-:TZ.]/g,'').slice(0,14)+'-'+Math.floor(Math.random()*900+100);
+ const payload={order_number:orderNumber,customer:f.get('customer'),phone:f.get('phone'),order_type:f.get('type'),style:f.get('style'),handover_date:f.get('date')||null,order_value:value,amount_paid:paid,status:f.get('status'),notes:f.get('notes'),created_by:currentUser.id};
+ const {error}=await supabase.from('bridal_orders').insert(payload);if(error){alert('Could not save order: '+error.message);return}await loadCloudData();e.target.reset();closeModal('order-modal');showPage('orders')
+});
+document.getElementById('material-form').addEventListener('submit',async e=>{
+ e.preventDefault();let f=new FormData(e.target);const payload={name:f.get('name'),category:f.get('category'),quantity:+f.get('qty'),unit:f.get('unit'),reorder_level:+f.get('reorder')};
+ const {error}=await supabase.from('materials').insert(payload);if(error){alert('Could not save material: '+error.message);return}await loadCloudData();e.target.reset();closeModal('material-modal')
+});
 function tableOrEmpty(headers,rows){if(!rows.length)return '<div class="empty">No records yet. Add your first record to get started.</div>';return '<div class="table-wrap"><table><thead><tr>'+headers.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>'+rows.join('')+'</tbody></table></div>'}
 function render(){
  const orders=db.orders,materials=db.materials,total=orders.reduce((a,o)=>a+o.value,0),paid=orders.reduce((a,o)=>a+o.paid,0),active=orders.filter(o=>o.status!=='Completed').length;
  document.getElementById('m-orders').textContent=orders.length;document.getElementById('m-production').textContent=active;document.getElementById('m-value').textContent=money(total);document.getElementById('m-stock').textContent=materials.length;
  document.getElementById('f-value').textContent=money(total);document.getElementById('f-paid').textContent=money(paid);document.getElementById('f-due').textContent=money(total-paid);document.getElementById('f-closed').textContent=orders.filter(o=>o.value>0&&o.paid>=o.value).length;
- const stages=['New enquiry','Design approved','In production','Fitting','Ready for collection','Completed'];let counts=stages.map(s=>orders.filter(o=>o.status===s).length),max=Math.max(1,...counts);
+ const counts=stages.map(s=>orders.filter(o=>o.status===s).length),max=Math.max(1,...counts);
  document.getElementById('pipeline').innerHTML=stages.map((s,i)=>`<div class="bar-col"><div class="bar" title="${counts[i]} orders" style="height:${Math.max(4,counts[i]/max*125)}px"></div><span>${['New','Design','Making','Fitting','Ready','Done'][i]}</span></div>`).join('');
- const exhtml=executives.map(x=>`<button class="exec" onclick="selectExecutive('${x[0]}')"><span class="exec-icon">${x[1]}</span><span><strong>${x[0]}</strong><small>${x[2]}</small></span><span class="pill">Open</span></button>`).join('');
- document.getElementById('exec-short').innerHTML=executives.slice(0,4).map(x=>`<button class="exec" onclick="showPage('executives');selectExecutive('${x[0]}')"><span class="exec-icon">${x[1]}</span><span><strong>${x[0]}</strong><small>${x[2]}</small></span></button>`).join('');
- document.getElementById('exec-full').innerHTML=exhtml;
- let orderRows=orders.map(o=>`<tr><td><b>${esc(o.id)}</b></td><td>${esc(o.customer)}<div class="muted small">${esc(o.phone)}</div></td><td>${esc(o.type)}<div class="muted small">${esc(o.style)}</div></td><td>${o.date||'—'}</td><td>${money(o.value)}</td><td>${money(o.paid)}<div class="muted small">Due ${money(o.value-o.paid)}</div></td><td><select aria-label="Update status" onchange="updateStatus('${o.id}',this.value)">${stages.map(s=>`<option ${s===o.status?'selected':''}>${s}</option>`).join('')}</select></td></tr>`);
+ const visibleExecs=executives.filter(x=>currentUser&& (currentUser.role==='CEO'||x[0]===currentUser.role));
+ const exhtml=visibleExecs.map(x=>`<button class="exec" onclick="selectExecutive('${x[0]}')"><span class="exec-icon">${x[1]}</span><span><strong>${x[0]}</strong><small>${x[2]}</small></span><span class="pill">Open</span></button>`).join('');
+ document.getElementById('exec-short').innerHTML=visibleExecs.slice(0,4).map(x=>`<button class="exec" onclick="showPage('executives');selectExecutive('${x[0]}')"><span class="exec-icon">${x[1]}</span><span><strong>${x[0]}</strong><small>${x[2]}</small></span></button>`).join('');
+ document.getElementById('exec-full').innerHTML=exhtml||'<div class="empty">No executive office is assigned to this role.</div>';
+ let orderRows=orders.map(o=>`<tr><td><b>${esc(o.displayId)}</b></td><td>${esc(o.customer)}<div class="muted small">${esc(o.phone)}</div></td><td>${esc(o.type)}<div class="muted small">${esc(o.style)}</div></td><td>${o.date||'—'}</td><td>${money(o.value)}</td><td>${money(o.paid)}<div class="muted small">Due ${money(o.value-o.paid)}</div></td><td>${currentUser&&['CEO','COO','Sales Director'].includes(currentUser.role)?`<select aria-label="Update status" onchange="updateStatus('${o.id}',this.value)">${stages.map(s=>`<option ${s===o.status?'selected':''}>${s}</option>`).join('')}</select>`:`<span class="tag">${esc(o.status)}</span>`}</td></tr>`);
  document.getElementById('orders-table').innerHTML=tableOrEmpty(['Order ID','Customer','Order details','Deadline','Value','Paid / balance','Status'],orderRows);
- document.getElementById('recent-orders').innerHTML=tableOrEmpty(['Order ID','Customer','Value','Status'],orders.slice(0,5).map(o=>`<tr><td>${esc(o.id)}</td><td>${esc(o.customer)}</td><td>${money(o.value)}</td><td><span class="tag ${o.status==='Completed'?'green':''}">${esc(o.status)}</span></td></tr>`));
- document.getElementById('production-table').innerHTML=tableOrEmpty(['Order','Customer','Dress','Deadline','Stage'],orders.filter(o=>o.status!=='Completed').map(o=>`<tr><td>${esc(o.id)}</td><td>${esc(o.customer)}</td><td>${esc(o.style||o.type)}</td><td>${o.date||'—'}</td><td><span class="tag gold">${esc(o.status)}</span></td></tr>`));
- document.getElementById('inventory-table').innerHTML=tableOrEmpty(['Material','Category','Quantity','Reorder level','Stock status'],materials.map((m,i)=>`<tr><td><b>${esc(m.name)}</b></td><td>${esc(m.category)}</td><td>${m.qty} ${esc(m.unit)}</td><td>${m.reorder} ${esc(m.unit)}</td><td><span class="tag ${m.qty<=m.reorder?'gold':'green'}">${m.qty<=m.reorder?'Reorder soon':'In stock'}</span></td></tr>`));
+ document.getElementById('recent-orders').innerHTML=tableOrEmpty(['Order ID','Customer','Value','Status'],orders.slice(0,5).map(o=>`<tr><td>${esc(o.displayId)}</td><td>${esc(o.customer)}</td><td>${money(o.value)}</td><td><span class="tag ${o.status==='Completed'?'green':''}">${esc(o.status)}</span></td></tr>`));
+ document.getElementById('production-table').innerHTML=tableOrEmpty(['Order','Customer','Dress','Deadline','Stage'],orders.filter(o=>o.status!=='Completed').map(o=>`<tr><td>${esc(o.displayId)}</td><td>${esc(o.customer)}</td><td>${esc(o.style||o.type)}</td><td>${o.date||'—'}</td><td><span class="tag gold">${esc(o.status)}</span></td></tr>`));
+ document.getElementById('inventory-table').innerHTML=tableOrEmpty(['Material','Category','Quantity','Reorder level','Stock status'],materials.map(m=>`<tr><td><b>${esc(m.name)}</b></td><td>${esc(m.category)}</td><td>${m.qty} ${esc(m.unit)}</td><td>${m.reorder} ${esc(m.unit)}</td><td><span class="tag ${m.qty<=m.reorder?'gold':'green'}">${m.qty<=m.reorder?'Reorder soon':'In stock'}</span></td></tr>`));
  let customers=[...new Map(orders.map(o=>[o.customer.toLowerCase(),o])).values()];
  document.getElementById('customers-table').innerHTML=tableOrEmpty(['Customer','Phone','Orders','Total order value'],customers.map(c=>{let os=orders.filter(o=>o.customer.toLowerCase()===c.customer.toLowerCase());return `<tr><td>${esc(c.customer)}</td><td>${esc(c.phone||'—')}</td><td>${os.length}</td><td>${money(os.reduce((a,o)=>a+o.value,0))}</td></tr>`}));
- document.getElementById('finance-table').innerHTML=tableOrEmpty(['Order','Customer','Order value','Paid','Balance'],orders.map(o=>`<tr><td>${esc(o.id)}</td><td>${esc(o.customer)}</td><td>${money(o.value)}</td><td>${money(o.paid)}</td><td>${money(o.value-o.paid)}</td></tr>`));
+ document.getElementById('finance-table').innerHTML=tableOrEmpty(['Order','Customer','Order value','Paid','Balance'],orders.map(o=>`<tr><td>${esc(o.displayId)}</td><td>${esc(o.customer)}</td><td>${money(o.value)}</td><td>${money(o.paid)}</td><td>${money(o.value-o.paid)}</td></tr>`));
  let overdue=orders.filter(o=>o.date&&new Date(o.date)<new Date()&&o.status!=='Completed').length,low=materials.filter(m=>m.qty<=m.reorder);
- document.getElementById('insights').innerHTML=`<p><b>${orders.length}</b> bridal orders have been entered, with a combined order value of <b>${money(total)}</b>.</p><p><b>${active}</b> orders are not yet marked completed. <b>${overdue}</b> unfinished orders have a deadline in the past.</p><p><b>${low.length}</b> material items are at or below their reorder levels${low.length?': '+low.map(m=>esc(m.name)).join(', '):'.'}</p><p>Recorded deposits total <b>${money(paid)}</b>; recorded outstanding balances total <b>${money(total-paid)}</b>.</p><p class="muted small">Insights are calculated only from the records entered in this browser.</p>`;
+ document.getElementById('insights').innerHTML=`<p><b>${orders.length}</b> bridal orders have been entered, with a combined order value of <b>${money(total)}</b>.</p><p><b>${active}</b> orders are not yet marked completed. <b>${overdue}</b> unfinished orders have a deadline in the past.</p><p><b>${low.length}</b> material items are at or below their reorder levels${low.length?': '+low.map(m=>esc(m.name)).join(', '):'.'}</p><p>Recorded deposits total <b>${money(paid)}</b>; recorded outstanding balances total <b>${money(total-paid)}</b>.</p><p class="muted small">Figures are loaded from the Riley Fashions Supabase database and filtered by your database permissions.</p>`;
 }
-function updateStatus(id,status){let o=db.orders.find(x=>x.id===id);if(o){o.status=status;save()}}
-function selectExecutive(name){selectedExec=name;let x=executives.find(a=>a[0]===name);document.getElementById('chat-title').textContent=name+' Office';document.getElementById('chat-sub').textContent=x[2];document.getElementById('messages').innerHTML=`<div class="msg ai">Welcome to the ${name} Office. ${x[3]}\n\nI can provide a demonstration response using the records entered in this workspace. Live AI connection will be added in a later step.</div>`}
+async function updateStatus(id,status){const {error}=await supabase.from('bridal_orders').update({status}).eq('id',id);if(error){alert('Could not update order: '+error.message);await loadCloudData();return}await loadCloudData()}
+function selectExecutive(name){if(!currentUser||!(currentUser.role==='CEO'||currentUser.role===name)){alert('This executive office is not assigned to your role.');return}selectedExec=name;let x=executives.find(a=>a[0]===name);document.getElementById('chat-title').textContent=name+' Office';document.getElementById('chat-sub').textContent=x[2];document.getElementById('messages').innerHTML=`<div class="msg ai">Welcome to the ${name} Office. ${x[3]}\n\nThis is still a demonstration assistant. A live AI service has not yet been connected.</div>`}
 function sendMessage(){let input=document.getElementById('chat-input'),q=input.value.trim();if(!q)return;let box=document.getElementById('messages');box.innerHTML+=`<div class="msg user">${esc(q)}</div>`;input.value='';let a=executiveReply(selectedExec,q);box.innerHTML+=`<div class="msg ai">${esc(a)}</div>`;box.scrollTop=box.scrollHeight}
-function executiveReply(role,q){let orders=db.orders,total=orders.reduce((a,o)=>a+o.value,0),paid=orders.reduce((a,o)=>a+o.paid,0),due=total-paid,active=orders.filter(o=>o.status!=='Completed').length,low=db.materials.filter(m=>m.qty<=m.reorder);
- let base=`Workspace snapshot: ${orders.length} orders; ${active} unfinished orders; order value ${money(total)}; deposits ${money(paid)}; outstanding ${money(due)}; ${low.length} materials at/below reorder level.`;
- let r=role;
- if(r==='CFO')return base+'\n\nFinance guidance: reconcile every deposit against a receipt, confirm the cost of materials and labour for each gown, and calculate gross margin before treating order value as profit. This workspace does not yet contain expense records.';
- if(r==='COO')return base+'\n\nOperations guidance: review every unfinished order against its handover date, assign a responsible tailor, and use design approval, cutting, sewing, fitting, finishing and handover checkpoints.';
- if(r==='CMO')return base+'\n\nMarketing guidance: build a portfolio of completed gowns (with customer permission), publish short behind-the-scenes videos, collect testimonials, and track enquiries by campaign. Add campaign spend and leads before calculating return on marketing.';
- if(r==='Sales Director')return base+'\n\nSales guidance: respond quickly to enquiries, record event dates and consultation appointments, follow up on quotations, and request referrals after successful handover.';
- if(r==='Procurement Manager')return base+'\n\nProcurement guidance: '+(low.length?'review reorder needs for '+low.map(m=>m.name).join(', ')+'. ':'No low-stock alerts are currently recorded. ')+'Compare supplier prices and quality, and link material purchases to production orders.';
- if(r==='Quality Control')return base+'\n\nQuality guidance: inspect measurements, seam strength, embellishments, lining, zip or closure, fit, cleanliness and final presentation before customer handover.';
- if(r==='HR Manager')return base+'\n\nHR guidance: define responsibilities for designers, cutters, tailors, beading/finishing staff and customer service. Track workload, skills and delivery performance fairly.';
- if(r==='Internal Auditor')return base+'\n\nControl guidance: use numbered order records, written design approvals, receipts for deposits, stock issue records and customer sign-off at collection. Independent reconciliation is still required.';
- return base+'\n\nCEO guidance: review demand, profit margins, delivery reliability, customer satisfaction and cash position together. Set a small number of measurable monthly priorities and assign an accountable person to each.';
+function executiveReply(role,q){let orders=db.orders,total=orders.reduce((a,o)=>a+o.value,0),paid=orders.reduce((a,o)=>a+o.paid,0),due=total-paid,active=orders.filter(o=>o.status!=='Completed').length,low=db.materials.filter(m=>m.qty<=m.reorder);let base=`Cloud workspace snapshot: ${orders.length} orders; ${active} unfinished orders; order value ${money(total)}; deposits ${money(paid)}; outstanding ${money(due)}; ${low.length} materials at/below reorder level.`;
+ if(role==='CFO')return base+'\n\nFinance guidance: reconcile every deposit against a receipt, confirm material and labour costs for each gown, and calculate gross margin before treating order value as profit.';
+ if(role==='COO')return base+'\n\nOperations guidance: review every unfinished order against its handover date, assign a responsible tailor, and use design approval, cutting, sewing, fitting, finishing and handover checkpoints.';
+ if(role==='CMO')return base+'\n\nMarketing guidance: build a portfolio of completed gowns (with customer permission), publish short behind-the-scenes videos, collect testimonials, and track enquiries by campaign.';
+ if(role==='Sales Director')return base+'\n\nSales guidance: respond quickly to enquiries, record event dates and consultations, follow up on quotations, and request referrals after successful handover.';
+ if(role==='Procurement Manager')return base+'\n\nProcurement guidance: '+(low.length?'review reorder needs for '+low.map(m=>m.name).join(', ')+'. ':'No low-stock alerts are currently recorded. ')+'Compare supplier prices and quality, and link material purchases to production orders.';
+ if(role==='Quality Control')return base+'\n\nQuality guidance: inspect measurements, seam strength, embellishments, lining, zip or closure, fit, cleanliness and final presentation before customer handover.';
+ if(role==='HR Manager')return base+'\n\nHR guidance: define responsibilities for designers, cutters, tailors, beading/finishing staff and customer service. Track workload, skills and delivery performance fairly.';
+ if(role==='Internal Auditor')return base+'\n\nControl guidance: use numbered order records, written design approvals, receipts for deposits, stock issue records and customer sign-off at collection.';
+ return base+'\n\nCEO guidance: review demand, profit margins, delivery reliability, customer satisfaction and cash position together. Set measurable monthly priorities and assign an accountable person to each.';
 }
-render();selectExecutive('CEO');
+// Restore an existing Supabase session after a page refresh.
+(async()=>{try{const {data}=await supabase.auth.getSession();if(data.session){await loadProfile(data.session.user);await loadCloudData();document.getElementById('login-screen').style.display='none';applyPermissions();showPage('dashboard');setConnection('Cloud connected',true)}else{setConnection('Sign in to connect',false)}}catch(error){console.error(error);setConnection('Connection needs attention',false)}})();
 </script>
 </body>
 </html>
